@@ -1,0 +1,6 @@
+{
+  "name": "Enchanted Birthday Letter & Parchment Story",
+  "description": "An interactive 3D birthday envelope experience with aesthetic multi-page parchment letter turning, wax seal breaking, polaroid memories, and music box melodies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
