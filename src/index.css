@@ -1044,4 +1044,116 @@
   animation: lockShakeAnim 0.45s ease-in-out;
 }
 
+/* ================= THEME-SPECIFIC AMBIENT ORBS ================= */
+.orb-stressed-1 {
+  width: 440px;
+  height: 440px;
+  background: radial-gradient(circle, rgba(13, 148, 136, 0.4), transparent 70%);
+  top: 8%;
+  left: 10%;
+}
+.orb-stressed-2 {
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.3), transparent 70%);
+  bottom: 8%;
+  right: 10%;
+  animation-delay: -4s;
+}
+.orb-stressed-3 {
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.25), transparent 70%);
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: -8s;
+}
+
+.orb-laugh-1 {
+  width: 440px;
+  height: 440px;
+  background: radial-gradient(circle, rgba(234, 179, 8, 0.45), transparent 70%);
+  top: 6%;
+  left: 8%;
+}
+.orb-laugh-2 {
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.45), transparent 70%);
+  bottom: 8%;
+  right: 8%;
+  animation-delay: -3s;
+}
+.orb-laugh-3 {
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.4), transparent 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: -6s;
+}
+
+/* ================= THEME ENVELOPE COLOR SCHEMES ================= */
+/* 1. Stressed Envelope Theme (Indigo & Sage Ocean Teal) */
+.envelope-theme-stressed .envelope-back {
+  background: linear-gradient(180deg, #1b4754 0%, #0e272e 100%) !important;
+}
+.envelope-theme-stressed .envelope-pocket-left {
+  border-left-color: #163a45 !important;
+}
+.envelope-theme-stressed .envelope-pocket-right {
+  border-right-color: #12303a !important;
+}
+.envelope-theme-stressed .envelope-pocket-bottom {
+  background: linear-gradient(0deg, #0e262e 0%, #163d47 50%, #205361 100%) !important;
+}
+.envelope-theme-stressed .envelope-flap {
+  border-top-color: #265f6f !important;
+}
+
+/* 2. Laugh Envelope Theme (Electric Amber & Vibrant Tangerine) */
+.envelope-theme-laugh .envelope-back {
+  background: linear-gradient(180deg, #c2410c 0%, #7c2d12 100%) !important;
+}
+.envelope-theme-laugh .envelope-pocket-left {
+  border-left-color: #9a3412 !important;
+}
+.envelope-theme-laugh .envelope-pocket-right {
+  border-right-color: #8c2e0e !important;
+}
+.envelope-theme-laugh .envelope-pocket-bottom {
+  background: linear-gradient(0deg, #7c2d12 0%, #b45309 50%, #d97706 100%) !important;
+}
+.envelope-theme-laugh .envelope-flap {
+  border-top-color: #ea580c !important;
+}
+
+/* ================= THEME WAX SEALS ================= */
+.wax-theme-stressed .wax-seal-outer {
+  background: radial-gradient(circle at 35% 35%, #0d9488, #0f766e 60%, #134e4a 100%) !important;
+  border-color: rgba(94, 234, 212, 0.45) !important;
+}
+.wax-theme-stressed .wax-seal-inner {
+  background: radial-gradient(circle at 40% 40%, rgba(13, 148, 136, 0.85), rgba(17, 94, 89, 0.95)) !important;
+  border-color: rgba(94, 234, 212, 0.6) !important;
+}
+.wax-theme-stressed .wax-seal-text {
+  color: #ccfbf1 !important;
+}
+
+.wax-theme-laugh .wax-seal-outer {
+  background: radial-gradient(circle at 35% 35%, #f59e0b, #d97706 60%, #9a3412 100%) !important;
+  border-color: rgba(254, 240, 138, 0.5) !important;
+}
+.wax-theme-laugh .wax-seal-inner {
+  background: radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.9), rgba(194, 65, 12, 0.95)) !important;
+  border-color: rgba(254, 240, 138, 0.6) !important;
+}
+.wax-theme-laugh .wax-seal-text {
+  color: #fef08a !important;
+}
+
+
 

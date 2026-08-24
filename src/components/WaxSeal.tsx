@@ -7,16 +7,26 @@ import {
   stopChargingSound,
   playWaxCrackSound,
 } from '../utils/audio';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Heart, Smile, Flower2, Cake, Star } from 'lucide-react';
+import { EnvelopeTheme } from '../types';
 
 interface WaxSealProps {
   isBroken: boolean;
   onBreak: () => void;
+  theme?: EnvelopeTheme;
+  sealSymbol?: 'sparkles' | 'heart' | 'lotus' | 'laugh' | 'cake' | 'star';
+  sealText?: string;
 }
 
 const RING_CIRCUMFERENCE = 238.76;
 
-export const WaxSeal: React.FC<WaxSealProps> = ({ isBroken, onBreak }) => {
+export const WaxSeal: React.FC<WaxSealProps> = ({
+  isBroken,
+  onBreak,
+  theme = 'celebration',
+  sealSymbol,
+  sealText,
+}) => {
   const [isPressing, setIsPressing] = useState(false);
   const [isCracking, setIsCracking] = useState(false);
   const [progressOffset, setProgressOffset] = useState(RING_CIRCUMFERENCE);
@@ -25,6 +35,18 @@ export const WaxSeal: React.FC<WaxSealProps> = ({ isBroken, onBreak }) => {
   const pressStartRef = useRef<number | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const getThemeWaxColors = () => {
+    switch (theme) {
+      case 'stressed':
+        return ['#0d9488', '#0f766e', '#14b8a6', '#5eead4', '#99f6e4'];
+      case 'laugh':
+        return ['#f59e0b', '#d97706', '#ea580c', '#facc15', '#fb7185'];
+      case 'celebration':
+      default:
+        return ['#e11d48', '#991b1b', '#f59e0b', '#fbbf24', '#fef08a'];
+    }
+  };
 
   const triggerBreak = () => {
     if (isBroken) return;
@@ -45,13 +67,13 @@ export const WaxSeal: React.FC<WaxSealProps> = ({ isBroken, onBreak }) => {
 
     try {
       confetti({
-        particleCount: 32,
-        spread: 70,
+        particleCount: 36,
+        spread: 75,
         origin: { x: 0.5, y: 0.48 },
-        colors: ['#e11d48', '#991b1b', '#f59e0b', '#fbbf24', '#fef08a'],
-        scalar: 0.7,
-        gravity: 1.3,
-        ticks: 80,
+        colors: getThemeWaxColors(),
+        scalar: 0.8,
+        gravity: 1.2,
+        ticks: 90,
       });
     } catch {
       // ignore
@@ -88,7 +110,7 @@ export const WaxSeal: React.FC<WaxSealProps> = ({ isBroken, onBreak }) => {
     const chargeStep = () => {
       if (!pressStartRef.current || isBroken) return;
       const elapsed = Date.now() - pressStartRef.current;
-      const targetDuration = 800; // 0.8s hold
+      const targetDuration = 750; // fast responsive 0.75s hold
       const progress = Math.min(elapsed / targetDuration, 1);
 
       setProgressOffset(RING_CIRCUMFERENCE * (1 - progress));
@@ -151,9 +173,30 @@ export const WaxSeal: React.FC<WaxSealProps> = ({ isBroken, onBreak }) => {
     }
   };
 
+  const renderSealIcon = () => {
+    const symbol = sealSymbol || (theme === 'stressed' ? 'lotus' : theme === 'laugh' ? 'laugh' : 'sparkles');
+    switch (symbol) {
+      case 'lotus':
+        return <Flower2 className="w-4 h-4 sm:w-5 sm:h-5 text-teal-100 fill-teal-200/80" />;
+      case 'laugh':
+        return <Smile className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100 fill-amber-200/80" />;
+      case 'heart':
+        return <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-rose-100 fill-rose-200/80" />;
+      case 'cake':
+        return <Cake className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100 fill-amber-200/80" />;
+      case 'star':
+        return <Star className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100 fill-amber-200/80" />;
+      case 'sparkles':
+      default:
+        return <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100 fill-amber-200/80" />;
+    }
+  };
+
+  const displaySealText = sealText || (theme === 'stressed' ? 'BREATHE' : theme === 'laugh' ? 'LOL' : 'FOR YOU');
+
   return (
     <div
-      className={`wax-seal ${isPressing ? 'is-pressing' : ''} ${
+      className={`wax-seal wax-theme-${theme} ${isPressing ? 'is-pressing' : ''} ${
         isCracking ? 'is-cracking' : ''
       } ${isBroken ? 'is-broken' : ''}`}
       onPointerDown={handleStart}
@@ -187,9 +230,9 @@ export const WaxSeal: React.FC<WaxSealProps> = ({ isBroken, onBreak }) => {
           <div className="wax-seal-outer">
             <div className="wax-seal-inner">
               <div className="wax-seal-crest">
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100 fill-amber-200/80" />
+                {renderSealIcon()}
               </div>
-              <span className="wax-seal-text font-cinzel">FOR YOU</span>
+              <span className="wax-seal-text font-cinzel">{displaySealText}</span>
             </div>
           </div>
         </div>
@@ -198,9 +241,9 @@ export const WaxSeal: React.FC<WaxSealProps> = ({ isBroken, onBreak }) => {
           <div className="wax-seal-outer">
             <div className="wax-seal-inner">
               <div className="wax-seal-crest">
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-100 fill-amber-200/80" />
+                {renderSealIcon()}
               </div>
-              <span className="wax-seal-text font-cinzel">FOR YOU</span>
+              <span className="wax-seal-text font-cinzel">{displaySealText}</span>
             </div>
           </div>
         </div>

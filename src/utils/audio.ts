@@ -646,4 +646,95 @@ export function playLockUnlockSound() {
   }
 }
 
+/**
+ * Calming Tibetan Singing Bowl & Zen Ambient Resonance (Stressed Theme)
+ */
+export function playCalmZenChime() {
+  if (!audioCtx) initAudio();
+  if (!audioCtx) return;
+
+  try {
+    const now = audioCtx.currentTime;
+    const fundamental = 396; // Solfeggio 396Hz (liberating guilt/fear & tension release)
+    const harmonics = [fundamental, fundamental * 1.5, fundamental * 2.01, fundamental * 2.76];
+
+    harmonics.forEach((freq, idx) => {
+      const osc = audioCtx!.createOscillator();
+      const gain = audioCtx!.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now);
+
+      const amp = 0.12 / (idx + 1);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(amp, now + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.8);
+
+      osc.connect(gain);
+      gain.connect(audioCtx!.destination);
+      osc.start(now);
+      osc.stop(now + 2.8);
+    });
+  } catch (e) {
+    console.error("Zen chime error", e);
+  }
+}
+
+/**
+ * Playful Comedic Boing & Silly Horn (Laugh Theme)
+ */
+export function playFunnyBoingSound() {
+  if (!audioCtx) initAudio();
+  if (!audioCtx) return;
+
+  try {
+    const now = audioCtx.currentTime;
+
+    // Classic Cartoon Boing Pitch Sweep
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.18);
+    osc.frequency.exponentialRampToValueAtTime(330, now + 0.35);
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+
+    // Silly double pop
+    setTimeout(() => {
+      if (!audioCtx) return;
+      playTone(987.77, 0.15, "triangle", 0.15);
+      setTimeout(() => {
+        playTone(1318.5, 0.25, "triangle", 0.2);
+      }, 100);
+    }, 220);
+  } catch (e) {
+    console.error("Funny boing error", e);
+  }
+}
+
+/**
+ * Theme-aware unseal audio trigger
+ */
+export function playThemeUnsealSound(theme: 'celebration' | 'stressed' | 'laugh' | 'custom') {
+  switch (theme) {
+    case 'stressed':
+      playCalmZenChime();
+      break;
+    case 'laugh':
+      playFunnyBoingSound();
+      break;
+    case 'celebration':
+    default:
+      playChimeSound();
+      break;
+  }
+}
+
+
 

@@ -206,6 +206,7 @@ export const CustomizerModal: React.FC<CustomizerModalProps> = ({
       giftVideoMessage: giftVideoMessage.trim() || DEFAULT_DATA.giftVideoMessage || '',
       pages: pages.filter((p) => p.content.trim().length > 0),
       photos,
+      envelopes: appData.envelopes || DEFAULT_DATA.envelopes,
     };
 
     onSave(updated);
