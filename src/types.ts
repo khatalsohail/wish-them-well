@@ -25,6 +25,10 @@ export interface AppData {
   giftVideoUrl?: string;
   giftVideoTitle?: string;
   giftVideoMessage?: string;
+  secretPassword?: string;
+  riddlePrompt?: string;
+  waxSealColor?: string;
+  waxSealSymbol?: string;
 }
 
 export const DEFAULT_PAGES: LetterPage[] = [
@@ -91,5 +95,7 @@ export const DEFAULT_DATA: AppData = {
   giftBoxEnabled: true,
   giftVideoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
   giftVideoTitle: "A Special Birthday Video For You 🎥✨",
-  giftVideoMessage: "May this next chapter of your life be filled with unforgettable adventures, pure joy, and dreams fulfilled! 🎂💖"
+  giftVideoMessage: "May this next chapter of your life be filled with unforgettable adventures, pure joy, and dreams fulfilled! 🎂💖",
+  secretPassword: "",
+  riddlePrompt: ""
 };

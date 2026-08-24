@@ -17,6 +17,9 @@ import {
   ChevronRight,
   Gift,
   Film,
+  Sparkles,
+  ArrowLeft,
+  Share2,
 } from 'lucide-react';
 import { AppData, DEFAULT_DATA } from './types';
 import { AmbientCanvas } from './components/AmbientCanvas';
@@ -26,6 +29,13 @@ import { LetterContent } from './components/LetterContent';
 import { CountdownScreen } from './components/CountdownScreen';
 import { CustomizerModal } from './components/CustomizerModal';
 import { GiftBoxModal } from './components/GiftBoxModal';
+import { PasswordLockScreen } from './components/PasswordLockScreen';
+import { CreatorDashboard } from './components/CreatorDashboard';
+import {
+  decodeBase64ToAppData,
+  getUrlDataParam,
+  generateShareUrl,
+} from './utils/urlEncoder';
 import {
   initAudio,
   playChimeSound,
@@ -38,7 +48,18 @@ import {
 const STORAGE_KEY = 'happy_birthday_custom_data_v2';
 
 export default function App() {
+  // Check if URL has ?data= parameter for Viewer Mode
+  const [dataParam, setDataParam] = useState<string | null>(() => getUrlDataParam());
+  const [isViewerMode, setIsViewerMode] = useState<boolean>(() => Boolean(getUrlDataParam()));
+
+  // Active App Data
   const [appData, setAppData] = useState<AppData>(() => {
+    const urlData = getUrlDataParam();
+    if (urlData) {
+      const decoded = decodeBase64ToAppData(urlData);
+      if (decoded) return decoded;
+    }
+
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -48,6 +69,18 @@ export default function App() {
       // ignore
     }
     return DEFAULT_DATA;
+  });
+
+  // Strict Password / Riddle Lock state
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
+    const urlData = getUrlDataParam();
+    if (urlData) {
+      const decoded = decodeBase64ToAppData(urlData);
+      if (decoded && decoded.secretPassword && decoded.secretPassword.trim().length > 0) {
+        return false; // Locked until recipient enters exact password
+      }
+    }
+    return true; // No password required
   });
 
   // Envelope animation phases
@@ -69,9 +102,38 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
 
+  // Temporary preview flag for Creator
+  const [isPreviewingInCreator, setIsPreviewingInCreator] = useState(false);
+
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Save to localStorage
+  // Listen to popstate or url changes
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const param = getUrlDataParam();
+      setDataParam(param);
+      if (param) {
+        const decoded = decodeBase64ToAppData(param);
+        if (decoded) {
+          setAppData(decoded);
+          setIsViewerMode(true);
+          if (decoded.secretPassword && decoded.secretPassword.trim().length > 0) {
+            setIsUnlocked(false);
+          } else {
+            setIsUnlocked(true);
+          }
+        }
+      } else {
+        setIsViewerMode(false);
+        setIsUnlocked(true);
+      }
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    return () => window.removeEventListener('popstate', handleUrlChange);
+  }, []);
+
+  // Save to localStorage (Creator Mode)
   const saveAppData = (newData: AppData) => {
     setAppData(newData);
     try {
@@ -81,7 +143,7 @@ export default function App() {
     }
   };
 
-  // Evaluate countdown logic
+  // Evaluate countdown logic strictly
   useEffect(() => {
     if (demoCountdownEndTime) {
       if (demoCountdownEndTime > Date.now()) {
@@ -141,7 +203,7 @@ export default function App() {
 
   // Sequence to open envelope
   const handleOpenSequence = () => {
-    if (isOpen) return;
+    if (isOpen || isCountdownActive) return;
     initAudio();
     playChimeSound();
 
@@ -169,6 +231,7 @@ export default function App() {
   };
 
   const handleSealBreak = () => {
+    if (isCountdownActive) return;
     setIsSealBroken(true);
     setTimeout(() => {
       handleOpenSequence();
@@ -190,7 +253,9 @@ export default function App() {
     }, 700);
   };
 
+  // Disabled in Viewer Mode
   const handlePhotoUpdate = (index: number, newUrl: string) => {
+    if (isViewerMode) return;
     const nextPhotos = [...appData.photos];
     nextPhotos[index] = { ...nextPhotos[index], url: newUrl };
     saveAppData({ ...appData, photos: nextPhotos });
@@ -217,6 +282,84 @@ export default function App() {
     }
   };
 
+  // Switch to creator dashboard from viewer
+  const handleGoToCreatorMode = () => {
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.hash = '';
+    window.history.pushState({}, '', url.toString());
+    setIsViewerMode(false);
+    setIsPreviewingInCreator(false);
+    setIsUnlocked(true);
+  };
+
+  // ================= 1. CREATOR MODE DASHBOARD =================
+  if (!isViewerMode && !isPreviewingInCreator) {
+    return (
+      <CreatorDashboard
+        initialData={appData}
+        onSaveAndPreview={(newData) => {
+          saveAppData(newData);
+          setIsPreviewingInCreator(true);
+          handleReplay();
+          setTimeout(handleOpenSequence, 400);
+        }}
+        onEnterViewerMode={(newData) => {
+          saveAppData(newData);
+          const shareUrl = generateShareUrl(newData);
+          window.location.href = shareUrl;
+        }}
+      />
+    );
+  }
+
+  // ================= 2. STRICT BIRTHDAY COUNTDOWN LOCK (BEFORE BIRTHDAY ARRIVES) =================
+  if (isCountdownActive) {
+    const targetTimestamp =
+      demoCountdownEndTime ||
+      (appData.countdownTarget ? Date.parse(appData.countdownTarget) : Date.now() + 5000);
+
+    return (
+      <CountdownScreen
+        recipient={appData.recipient}
+        targetTime={targetTimestamp}
+        isViewerMode={isViewerMode}
+        onUnlock={() => {
+          setIsCountdownActive(false);
+          setDemoCountdownEndTime(null);
+          triggerCelebratoryConfetti();
+        }}
+        onTestDemo={() => {
+          setDemoCountdownEndTime(Date.now() + 5000);
+          setIsCountdownActive(true);
+        }}
+      />
+    );
+  }
+
+  // ================= 3. STRICT PASSWORD / RIDDLE LOCK SCREEN (VIEWER MODE) =================
+  if (
+    isViewerMode &&
+    !isUnlocked &&
+    appData.secretPassword &&
+    appData.secretPassword.trim().length > 0
+  ) {
+    return (
+      <PasswordLockScreen
+        requiredPassword={appData.secretPassword}
+        riddlePrompt={appData.riddlePrompt}
+        recipientName={appData.recipient}
+        onUnlock={() => {
+          setIsUnlocked(true);
+          setTimeout(() => {
+            handleOpenSequence();
+          }, 300);
+        }}
+      />
+    );
+  }
+
+  // ================= 4. VIEWER MODE INTERACTIVE ENVELOPE EXPERIENCE =================
   return (
     <div
       ref={containerRef}
@@ -234,16 +377,28 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-xs uppercase tracking-widest font-semibold text-rose-300/80">
-              Birthday Celebration
+              Happy Birthday, {appData.recipient}!
             </h1>
             <p className="text-sm sm:text-base font-serif italic text-rose-100/90 font-medium">
-              A special surprise for you
+              {appData.date || 'A special celebration for you'}
             </p>
           </div>
         </div>
 
         {/* Action Badges */}
         <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Creator Preview Banner / Exit */}
+          {isPreviewingInCreator && (
+            <button
+              type="button"
+              onClick={() => setIsPreviewingInCreator(false)}
+              className="px-3 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-xs font-semibold flex items-center space-x-1.5 transition active:scale-95 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Editor</span>
+            </button>
+          )}
+
           {/* Music Toggle */}
           <button
             type="button"
@@ -260,37 +415,19 @@ export default function App() {
             <span>{isMusicPlaying ? 'Playing ♪' : 'Birthday Tune'}</span>
           </button>
 
-          {/* Customize Drawer */}
-          <button
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            className="px-3 py-1.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 backdrop-blur-md text-rose-200 hover:text-white text-xs font-medium flex items-center space-x-1.5 transition-all duration-300 shadow-xs active:scale-95 cursor-pointer"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Customize</span>
-          </button>
+          {/* Creator Mode Customize Toggle (Hidden in true Viewer Mode) */}
+          {!isViewerMode && (
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="px-3 py-1.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 backdrop-blur-md text-rose-200 hover:text-white text-xs font-medium flex items-center space-x-1.5 transition-all duration-300 shadow-xs active:scale-95 cursor-pointer"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Customize</span>
+            </button>
+          )}
         </div>
       </header>
-
-      {/* Countdown Lock Screen */}
-      {isCountdownActive && (
-        <CountdownScreen
-          recipient={appData.recipient}
-          targetTime={
-            demoCountdownEndTime ||
-            (appData.countdownTarget ? Date.parse(appData.countdownTarget) : Date.now() + 5000)
-          }
-          onUnlock={() => {
-            setIsCountdownActive(false);
-            setDemoCountdownEndTime(null);
-            triggerCelebratoryConfetti();
-          }}
-          onTestDemo={() => {
-            setDemoCountdownEndTime(Date.now() + 5000);
-            setIsCountdownActive(true);
-          }}
-        />
-      )}
 
       {/* Main Stage (3D Perspective Stage) */}
       <main className="relative z-10 w-full flex-1 flex flex-col items-center justify-center px-3 sm:px-6 py-4 perspective-1500 overflow-visible">
@@ -315,11 +452,6 @@ export default function App() {
             className={`envelope-container relative group ${isOpen ? 'is-open' : ''} ${
               isSliding ? 'is-sliding' : ''
             } ${isUnfolded ? 'is-unfolded' : ''}`}
-            onClick={() => {
-              if (!isSealBroken && !isOpen) {
-                // Pulse guidance
-              }
-            }}
           >
             {/* Ambient Shadow */}
             <div className="envelope-ground-shadow" />
@@ -350,10 +482,12 @@ export default function App() {
                 className="absolute inset-0 pointer-events-none z-20 opacity-30 transition-opacity duration-700"
               />
 
-              {/* 4 Corner Polaroid Photo Memories */}
+              {/* 4 Corner Polaroid Photo Memories (Strictly read-only on Viewer Mode) */}
               <PolaroidMemories
                 photos={appData.photos}
                 onUpdatePhoto={handlePhotoUpdate}
+                isViewerMode={isViewerMode}
+                readOnly={isViewerMode}
               />
 
               {/* Multi-Page Letter Engine with Page Turning */}
@@ -392,84 +526,98 @@ export default function App() {
       </main>
 
       {/* Bottom Floating Interactive Control Bar */}
-      <footer className="relative z-20 w-full max-w-2xl px-4 py-4 sm:pb-6 flex items-center justify-center gap-2 sm:gap-3 transition-opacity duration-500">
-        {/* Replay */}
-        <button
-          type="button"
-          onClick={handleReplay}
-          className="px-3.5 sm:px-4 py-2 rounded-full bg-stone-900/80 hover:bg-stone-900 border border-white/20 text-white text-xs sm:text-sm font-medium flex items-center space-x-1.5 sm:space-x-2 shadow-lg backdrop-blur-md transition-all active:scale-95 hover:border-rose-400/50 cursor-pointer"
-        >
-          <RotateCcw className="w-4 h-4 text-rose-400" />
-          <span>Replay</span>
-        </button>
-
-        {/* Turn Page Quick Action (Visible when letter is unfolded and multi-page exists) */}
-        {isUnfolded && totalPages > 1 && (
+      <footer className="relative z-20 w-full max-w-2xl px-4 py-4 sm:pb-6 flex flex-col items-center gap-3 transition-opacity duration-500">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+          {/* Replay */}
           <button
             type="button"
-            onClick={handleTurnPageQuickAction}
-            className="px-3.5 sm:px-4 py-2 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-xs sm:text-sm font-semibold flex items-center space-x-1.5 sm:space-x-2 shadow-lg backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+            onClick={handleReplay}
+            className="px-3.5 sm:px-4 py-2 rounded-full bg-stone-900/80 hover:bg-stone-900 border border-white/20 text-white text-xs sm:text-sm font-medium flex items-center space-x-1.5 sm:space-x-2 shadow-lg backdrop-blur-md transition-all active:scale-95 hover:border-rose-400/50 cursor-pointer"
           >
-            <BookOpen className="w-4 h-4 text-amber-300" />
-            <span>
-              {currentPage < totalPages - 1
-                ? `Turn to Page ${currentPage + 2}`
-                : 'Turn to Page 1'}
-            </span>
-            <ChevronRight className="w-3.5 h-3.5 text-amber-300" />
+            <RotateCcw className="w-4 h-4 text-rose-400" />
+            <span>Replay</span>
           </button>
-        )}
 
-        {/* 3D Gift Box Button (Available when letter is unfolded) */}
-        {isUnfolded && appData.giftBoxEnabled !== false && (
+          {/* Turn Page Quick Action */}
+          {isUnfolded && totalPages > 1 && (
+            <button
+              type="button"
+              onClick={handleTurnPageQuickAction}
+              className="px-3.5 sm:px-4 py-2 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-xs sm:text-sm font-semibold flex items-center space-x-1.5 sm:space-x-2 shadow-lg backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+            >
+              <BookOpen className="w-4 h-4 text-amber-300" />
+              <span>
+                {currentPage < totalPages - 1
+                  ? `Turn to Page ${currentPage + 2}`
+                  : 'Turn to Page 1'}
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 text-amber-300" />
+            </button>
+          )}
+
+          {/* 3D Gift Box Button */}
+          {isUnfolded && appData.giftBoxEnabled !== false && (
+            <button
+              type="button"
+              onClick={() => {
+                initAudio();
+                setIsGiftModalOpen(true);
+              }}
+              className="px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-rose-700 via-amber-600 to-rose-700 hover:from-rose-600 hover:via-amber-500 hover:to-rose-600 border border-amber-300/50 text-white text-xs sm:text-sm font-bold flex items-center space-x-1.5 sm:space-x-2 shadow-glow-rose transition-all active:scale-95 cursor-pointer animate-pulse hover:animate-none"
+              title="Unwrap 3D gift box surprise"
+            >
+              <Gift className="w-4 h-4 text-amber-200" />
+              <span>3D Gift Box 🎁</span>
+            </button>
+          )}
+
+          {/* Focus Note */}
           <button
             type="button"
             onClick={() => {
-              initAudio();
-              setIsGiftModalOpen(true);
+              if (!isOpen) {
+                handleOpenSequence();
+              } else {
+                setIsZoomed(!isZoomed);
+              }
             }}
-            className="px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-rose-700 via-amber-600 to-rose-700 hover:from-rose-600 hover:to-amber-500 border border-amber-300/50 text-white text-xs sm:text-sm font-bold flex items-center space-x-1.5 sm:space-x-2 shadow-glow-rose transition-all active:scale-95 cursor-pointer animate-pulse hover:animate-none"
-            title="Unwrap 3D gift box surprise"
+            className="px-3.5 sm:px-4 py-2 rounded-full bg-stone-900/80 hover:bg-stone-900 border border-white/20 text-white text-xs sm:text-sm font-medium flex items-center space-x-1.5 sm:space-x-2 shadow-lg backdrop-blur-md transition-all active:scale-95 hover:border-rose-400/50 cursor-pointer"
           >
-            <Gift className="w-4 h-4 text-amber-200" />
-            <span>3D Gift Box 🎁</span>
+            {isZoomed ? (
+              <>
+                <ZoomOut className="w-4 h-4 text-amber-300" />
+                <span>View All</span>
+              </>
+            ) : (
+              <>
+                <ZoomIn className="w-4 h-4 text-amber-300" />
+                <span>Focus Note</span>
+              </>
+            )}
+          </button>
+
+          {/* Confetti Cannon */}
+          <button
+            type="button"
+            onClick={triggerCelebratoryConfetti}
+            className="px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs sm:text-sm font-semibold flex items-center space-x-1.5 sm:space-x-2 shadow-glow-rose transition-all active:scale-95 cursor-pointer"
+          >
+            <PartyPopper className="w-4 h-4" />
+            <span>Confetti! 🎉</span>
+          </button>
+        </div>
+
+        {/* Discreet "Create Your Own Birthday Envelope" link in Viewer Mode */}
+        {isViewerMode && (
+          <button
+            type="button"
+            onClick={handleGoToCreatorMode}
+            className="text-[11px] text-rose-300/60 hover:text-rose-200 flex items-center space-x-1 transition cursor-pointer"
+          >
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span>Create a custom birthday envelope for someone else</span>
           </button>
         )}
-
-        {/* Focus Note */}
-        <button
-          type="button"
-          onClick={() => {
-            if (!isOpen) {
-              handleOpenSequence();
-            } else {
-              setIsZoomed(!isZoomed);
-            }
-          }}
-          className="px-3.5 sm:px-4 py-2 rounded-full bg-stone-900/80 hover:bg-stone-900 border border-white/20 text-white text-xs sm:text-sm font-medium flex items-center space-x-1.5 sm:space-x-2 shadow-lg backdrop-blur-md transition-all active:scale-95 hover:border-rose-400/50 cursor-pointer"
-        >
-          {isZoomed ? (
-            <>
-              <ZoomOut className="w-4 h-4 text-amber-300" />
-              <span>View All</span>
-            </>
-          ) : (
-            <>
-              <ZoomIn className="w-4 h-4 text-amber-300" />
-              <span>Focus Note</span>
-            </>
-          )}
-        </button>
-
-        {/* Confetti Cannon */}
-        <button
-          type="button"
-          onClick={triggerCelebratoryConfetti}
-          className="px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs sm:text-sm font-semibold flex items-center space-x-1.5 sm:space-x-2 shadow-glow-rose transition-all active:scale-95 cursor-pointer"
-        >
-          <PartyPopper className="w-4 h-4" />
-          <span>Confetti! 🎉</span>
-        </button>
       </footer>
 
       {/* 3D Virtual Gift Box Unwrapping Modal */}
@@ -482,32 +630,34 @@ export default function App() {
         recipientName={appData.recipient}
       />
 
-      {/* Customize Drawer Modal */}
-      <CustomizerModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        appData={appData}
-        onSave={(newData) => {
-          saveAppData(newData);
-          setCurrentPage(0);
-          if (!isOpen) {
-            setTimeout(handleOpenSequence, 300);
-          } else {
-            triggerCelebratoryConfetti();
-          }
-        }}
-        onReset={() => {
-          if (window.confirm('Reset all text, pages, and photos to original defaults?')) {
-            saveAppData(DEFAULT_DATA);
+      {/* Customize Drawer Modal (Available when previewing in creator) */}
+      {!isViewerMode && (
+        <CustomizerModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          appData={appData}
+          onSave={(newData) => {
+            saveAppData(newData);
             setCurrentPage(0);
-            setIsModalOpen(false);
-          }
-        }}
-        onTestDemoCountdown={() => {
-          setDemoCountdownEndTime(Date.now() + 5000);
-          setIsCountdownActive(true);
-        }}
-      />
+            if (!isOpen) {
+              setTimeout(handleOpenSequence, 300);
+            } else {
+              triggerCelebratoryConfetti();
+            }
+          }}
+          onReset={() => {
+            if (window.confirm('Reset all text, pages, and photos to original defaults?')) {
+              saveAppData(DEFAULT_DATA);
+              setCurrentPage(0);
+              setIsModalOpen(false);
+            }
+          }}
+          onTestDemoCountdown={() => {
+            setDemoCountdownEndTime(Date.now() + 5000);
+            setIsCountdownActive(true);
+          }}
+        />
+      )}
     </div>
   );
 }

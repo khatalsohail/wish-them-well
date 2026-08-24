@@ -1034,3 +1034,14 @@
   animation: scaleInGift 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+@keyframes lockShakeAnim {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-10px); }
+  40%, 80% { transform: translateX(10px); }
+}
+
+.animate-shake {
+  animation: lockShakeAnim 0.45s ease-in-out;
+}
+
+

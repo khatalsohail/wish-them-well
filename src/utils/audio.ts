@@ -562,3 +562,88 @@ export function playGiftBoxExplosionSound() {
   }
 }
 
+/**
+ * Incorrect Password / Riddle Buzzer Sound
+ */
+export function playLockBuzzerSound() {
+  if (!audioCtx) initAudio();
+  if (!audioCtx) return;
+
+  try {
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.linearRampToValueAtTime(110, now + 0.25);
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.25);
+
+    // Second buzz pulse
+    setTimeout(() => {
+      if (!audioCtx) return;
+      const t = audioCtx.currentTime;
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = "sawtooth";
+      osc2.frequency.setValueAtTime(130, t);
+      osc2.frequency.linearRampToValueAtTime(100, t + 0.25);
+      gain2.gain.setValueAtTime(0.2, t);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(t);
+      osc2.stop(t + 0.25);
+    }, 120);
+  } catch (e) {
+    console.error("Lock buzzer audio error", e);
+  }
+}
+
+/**
+ * Correct Password / Riddle Unlocked Mechanical Click & Chime
+ */
+export function playLockUnlockSound() {
+  if (!audioCtx) initAudio();
+  if (!audioCtx) return;
+
+  try {
+    const now = audioCtx.currentTime;
+
+    // Heavy mechanical tumbler snap
+    const click = audioCtx.createOscillator();
+    const clickGain = audioCtx.createGain();
+    click.type = "square";
+    click.frequency.setValueAtTime(800, now);
+    click.frequency.exponentialRampToValueAtTime(80, now + 0.08);
+
+    clickGain.gain.setValueAtTime(0.3, now);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    click.connect(clickGain);
+    clickGain.connect(audioCtx.destination);
+
+    click.start(now);
+    click.stop(now + 0.08);
+
+    // Pleasant high melodic ascension
+    const notes = [659.25, 783.99, 987.77, 1318.5]; // E5, G5, B5, E6
+    notes.forEach((freq, idx) => {
+      setTimeout(() => {
+        playTone(freq, 0.5, "sine", 0.15);
+      }, 80 + idx * 80);
+    });
+  } catch (e) {
+    console.error("Lock unlock audio error", e);
+  }
+}
+
+
