@@ -42,9 +42,13 @@ import { PasswordLockScreen } from './components/PasswordLockScreen';
 import { CreatorDashboard } from './components/CreatorDashboard';
 import { EnvelopeStackView } from './components/EnvelopeStackView';
 import {
+  decodeAppData,
   decodeBase64ToAppData,
+  getUrlCardParam,
   getUrlDataParam,
   generateShareUrl,
+  fetchCardFromCloud,
+  saveCardToCloud,
 } from './utils/urlEncoder';
 import {
   initAudio,
@@ -60,16 +64,20 @@ import { triggerThemeConfetti } from './utils/confettiHelper';
 const STORAGE_KEY = 'happy_birthday_custom_data_v3';
 
 export default function App() {
-  // Check if URL has ?data= parameter for Viewer Mode
-  const [dataParam, setDataParam] = useState<string | null>(() => getUrlDataParam());
-  const [isViewerMode, setIsViewerMode] = useState<boolean>(() => Boolean(getUrlDataParam()));
+  const [isLoadingCloudCard, setIsLoadingCloudCard] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Check if URL has parameter for Viewer Mode
+  const [isViewerMode, setIsViewerMode] = useState<boolean>(() => Boolean(getUrlCardParam()));
 
   // Active App Data
   const [appData, setAppData] = useState<AppData>(() => {
-    const urlData = getUrlDataParam();
-    if (urlData) {
-      const decoded = decodeBase64ToAppData(urlData);
-      if (decoded) return decoded;
+    const cardParam = getUrlCardParam();
+    if (cardParam) {
+      if (cardParam.type === 'payload') {
+        const decoded = decodeAppData(cardParam.value);
+        if (decoded) return decoded;
+      }
     }
 
     try {
@@ -85,9 +93,9 @@ export default function App() {
 
   // Strict Password / Riddle Lock state
   const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
-    const urlData = getUrlDataParam();
-    if (urlData) {
-      const decoded = decodeBase64ToAppData(urlData);
+    const cardParam = getUrlCardParam();
+    if (cardParam && cardParam.type === 'payload') {
+      const decoded = decodeAppData(cardParam.value);
       if (decoded && decoded.secretPassword && decoded.secretPassword.trim().length > 0) {
         return false; // Locked until recipient enters exact password
       }
@@ -135,43 +143,56 @@ export default function App() {
 
   const activeTheme: EnvelopeTheme = activeEnvelope.theme || 'celebration';
 
-  // Listen to popstate or hash changes
+  // Listen to popstate or hash changes and fetch cloud cards
   useEffect(() => {
-    const handleUrlChange = () => {
-      const param = getUrlDataParam();
-      setDataParam(param);
-      if (param) {
-        const decoded = decodeBase64ToAppData(param);
+    const processUrl = async () => {
+      const cardParam = getUrlCardParam();
+      if (!cardParam) {
+        setIsViewerMode(false);
+        setIsUnlocked(true);
+        return;
+      }
+
+      setIsViewerMode(true);
+
+      if (cardParam.type === 'short_id') {
+        setIsLoadingCloudCard(true);
+        setLoadError(null);
+        try {
+          const cloudData = await fetchCardFromCloud(cardParam.value);
+          if (cloudData) {
+            setAppData(cloudData);
+            if (cloudData.secretPassword && cloudData.secretPassword.trim().length > 0) {
+              setIsUnlocked(false);
+            } else {
+              setIsUnlocked(true);
+            }
+          } else {
+            setLoadError('Keepsake not found or expired. Showing standard letter.');
+          }
+        } catch (err) {
+          setLoadError('Could not load keepsake.');
+        } finally {
+          setIsLoadingCloudCard(false);
+        }
+      } else {
+        const decoded = decodeAppData(cardParam.value);
         if (decoded) {
           setAppData(decoded);
-          setIsViewerMode(true);
           if (decoded.secretPassword && decoded.secretPassword.trim().length > 0) {
             setIsUnlocked(false);
           } else {
             setIsUnlocked(true);
           }
         }
-
-        // If data was in search query (?data=...), safely convert it to hash (#data=...)
-        // so page refreshes never hit HTTP 414 Request-URI Too Large limits
-        if (window.location.search && window.location.search.includes('data=')) {
-          const newUrl = `${window.location.origin}${window.location.pathname}#data=${param}`;
-          window.history.replaceState({}, '', newUrl);
-        }
-      } else {
-        setIsViewerMode(false);
-        setIsUnlocked(true);
       }
     };
 
-    // Run on initial load to clean up any ?data= in browser URL bar
-    if (window.location.search && window.location.search.includes('data=')) {
-      const param = getUrlDataParam();
-      if (param) {
-        const newUrl = `${window.location.origin}${window.location.pathname}#data=${param}`;
-        window.history.replaceState({}, '', newUrl);
-      }
-    }
+    processUrl();
+
+    const handleUrlChange = () => {
+      processUrl();
+    };
 
     window.addEventListener('popstate', handleUrlChange);
     window.addEventListener('hashchange', handleUrlChange);
@@ -356,6 +377,33 @@ export default function App() {
         return 'from-[#1a0b16] via-[#2d1226] to-[#120813]';
     }
   };
+
+  // ================= 0. CLOUD LOADING SCREEN =================
+  if (isLoadingCloudCard) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0e040c] text-stone-200">
+        <AmbientCanvas theme="celebration" />
+        <div className="relative z-10 flex flex-col items-center space-y-6 text-center px-4 max-w-sm">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-rose-600 via-amber-500 to-rose-700 p-1 shadow-2xl animate-bounce">
+            <div className="w-full h-full bg-[#180715] rounded-[22px] flex items-center justify-center">
+              <Sparkles className="w-10 h-10 text-amber-300 animate-spin" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h2 className="font-serif text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-rose-200 via-amber-100 to-rose-200">
+              Unpacking Keepsake...
+            </h2>
+            <p className="text-xs text-stone-400 font-sans tracking-wide">
+              Retrieving your personalized 3D birthday letters and parchment memories ✨
+            </p>
+          </div>
+          <div className="w-48 h-1.5 bg-stone-800 rounded-full overflow-hidden">
+            <div className="w-full h-full bg-gradient-to-r from-rose-500 to-amber-400 animate-pulse rounded-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ================= 1. CREATOR MODE DASHBOARD =================
   if (!isViewerMode && !isPreviewingInCreator) {

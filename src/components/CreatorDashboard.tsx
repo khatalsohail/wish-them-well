@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Gift,
@@ -26,6 +26,11 @@ import {
   Smile,
   Coffee,
   CheckCircle2,
+  MessageCircle,
+  Send,
+  QrCode,
+  Smartphone,
+  Download,
 } from 'lucide-react';
 import {
   AppData,
@@ -41,7 +46,8 @@ import {
   DEFAULT_STRESSED_PHOTOS,
   DEFAULT_LAUGH_PHOTOS,
 } from '../types';
-import { generateShareUrl } from '../utils/urlEncoder';
+import { generateShareUrl, saveCardToCloud } from '../utils/urlEncoder';
+import { getQrCodeSvgUrl } from '../utils/qrCode';
 import { initAudio, playTone, playTriumphChime } from '../utils/audio';
 
 interface CreatorDashboardProps {
@@ -197,6 +203,35 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({
   const [selectedEnvelopeIdx, setSelectedEnvelopeIdx] = useState<number>(0);
   const [copied, setCopied] = useState(false);
   const [activePageIdx, setActivePageIdx] = useState(0);
+  const [shortId, setShortId] = useState<string | null>(null);
+  const [isSyncingShortLink, setIsSyncingShortLink] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+
+  // Synchronize and generate short ID whenever data is edited
+  useEffect(() => {
+    let isMounted = true;
+    setIsSyncingShortLink(true);
+
+    const timeout = setTimeout(async () => {
+      try {
+        const id = await saveCardToCloud(data);
+        if (isMounted && id) {
+          setShortId(id);
+        }
+      } catch (err) {
+        console.warn('Could not sync short ID', err);
+      } finally {
+        if (isMounted) {
+          setIsSyncingShortLink(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+    };
+  }, [data]);
 
   const currentEnvelope: EnvelopeData =
     data.envelopes && data.envelopes[selectedEnvelopeIdx]
@@ -216,22 +251,60 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({
     });
   };
 
+  const shareUrl = typeof window !== 'undefined' ? generateShareUrl(data, shortId) : '';
+
   const handleCopyLink = async () => {
     initAudio();
     playTriumphChime();
-    const url = generateShareUrl(data);
+    const url = shareUrl;
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
     } catch {
-      // Fallback
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
     }
   };
 
-  const shareUrl = typeof window !== 'undefined' ? generateShareUrl(data) : '';
+  const handleWhatsAppShare = () => {
+    initAudio();
+    playTone(523.25, 0.15, 'sine', 0.1);
+    const text = `✨ Happy Birthday ${data.recipient || 'my friend'}! 🎂🎁 Open your special interactive parchment envelope keepsake here: ${shareUrl}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleTelegramShare = () => {
+    initAudio();
+    playTone(587.33, 0.15, 'sine', 0.1);
+    const text = `✨ Happy Birthday ${data.recipient || 'my friend'}! 🎂🎁 Open your special interactive parchment envelope keepsake here:`;
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleSmsShare = () => {
+    initAudio();
+    playTone(659.25, 0.15, 'sine', 0.1);
+    const text = `✨ Happy Birthday ${data.recipient || 'my friend'}! 🎂🎁 Open your special keepsake here: ${shareUrl}`;
+    window.location.href = `sms:?&body=${encodeURIComponent(text)}`;
+  };
+
+  const handleNativeShare = async () => {
+    initAudio();
+    playTriumphChime();
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Happy Birthday ${data.recipient || 'Keepsake'}! ✨`,
+          text: `A special interactive "Open When" birthday parchment letter for you! 🎁💌`,
+          url: shareUrl,
+        });
+      } catch {
+        handleCopyLink();
+      }
+    } else {
+      handleCopyLink();
+    }
+  };
 
   // Quick preset helper
   const applyPreset = (preset: { name: string; pages: LetterPage[] }) => {
@@ -1089,30 +1162,150 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({
         {/* TAB 4: SHARE & QR */}
         {activeTab === 'share' && (
           <div className="bg-[#180814] rounded-2xl border border-rose-950/80 p-5 sm:p-8 space-y-6 shadow-xl">
-            <div>
-              <h2 className="font-cinzel text-lg sm:text-xl font-bold text-amber-200 flex items-center space-x-2">
-                <Link2 className="w-5 h-5 text-amber-400" />
-                <span>Your Shareable Gift URL</span>
-              </h2>
-              <p className="text-xs text-stone-400 mt-1">
-                This single link holds all 3 envelopes, custom photos, dynamic themes, and locks. Send it to your recipient over WhatsApp, iMessage, or email!
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-black/60 border border-amber-400/30 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="font-mono text-xs text-amber-200 break-all select-all flex-1 line-clamp-2">
-                {shareUrl}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-950/80 pb-4">
+              <div>
+                <h2 className="font-cinzel text-lg sm:text-xl font-bold text-amber-200 flex items-center space-x-2">
+                  <Link2 className="w-5 h-5 text-amber-400" />
+                  <span>Ultra-Compact Shareable Gift URL</span>
+                </h2>
+                <p className="text-xs text-stone-400 mt-1">
+                  Optimized short link designed to send smoothly over WhatsApp, iMessage, SMS, and Instagram without truncation!
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={handleCopyLink}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 via-amber-600 to-rose-600 hover:from-rose-500 text-white font-cinzel text-xs font-bold flex items-center space-x-2 transition active:scale-95 whitespace-nowrap cursor-pointer shadow-md"
-              >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4 text-amber-200" />}
-                <span>{copied ? 'Copied!' : 'Copy Link'}</span>
-              </button>
+
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1.5 shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>
+                    {isSyncingShortLink ? 'Generating short link...' : `${shareUrl.length} characters (Compact)`}
+                  </span>
+                </span>
+              </div>
             </div>
 
+            {/* Short Link Display Card */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-black/60 border border-amber-400/30 space-y-3">
+              <label className="text-xs font-cinzel font-bold text-amber-300 uppercase tracking-wider block">
+                Direct Gift Link
+              </label>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="font-mono text-xs sm:text-sm text-amber-100 bg-stone-950/80 px-3.5 py-2.5 rounded-xl border border-white/10 break-all select-all flex-1 shadow-inner">
+                  {shareUrl}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className={`px-5 py-2.5 rounded-xl font-cinzel text-xs font-bold flex items-center justify-center space-x-2 transition active:scale-95 whitespace-nowrap cursor-pointer shadow-md ${
+                    copied
+                      ? 'bg-emerald-600 text-white border border-emerald-400 shadow-emerald-900/50'
+                      : 'bg-gradient-to-r from-rose-600 via-amber-600 to-rose-600 hover:from-rose-500 text-white border border-amber-300/40'
+                  }`}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4 text-white" />
+                      <span>Copied! ✨</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-amber-200" />
+                      <span>Copy Short Link</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* 1-Click Instant Messaging Share Buttons */}
+            <div className="space-y-3">
+              <label className="text-xs font-cinzel font-bold text-stone-300 uppercase tracking-wider block">
+                1-Click Instant Share To Messaging Apps
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* WhatsApp */}
+                <button
+                  type="button"
+                  onClick={handleWhatsAppShare}
+                  className="p-3 rounded-xl bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-200 flex flex-col items-center justify-center space-y-1.5 transition active:scale-95 cursor-pointer shadow-md group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow group-hover:scale-110 transition-transform">
+                    <MessageCircle className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold font-sans">WhatsApp</span>
+                </button>
+
+                {/* iMessage / SMS */}
+                <button
+                  type="button"
+                  onClick={handleSmsShare}
+                  className="p-3 rounded-xl bg-blue-950/50 hover:bg-blue-900/60 border border-blue-500/40 text-blue-200 flex flex-col items-center justify-center space-y-1.5 transition active:scale-95 cursor-pointer shadow-md group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white shadow group-hover:scale-110 transition-transform">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold font-sans">SMS / iMessage</span>
+                </button>
+
+                {/* Telegram */}
+                <button
+                  type="button"
+                  onClick={handleTelegramShare}
+                  className="p-3 rounded-xl bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/40 text-sky-200 flex flex-col items-center justify-center space-y-1.5 transition active:scale-95 cursor-pointer shadow-md group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center text-white shadow group-hover:scale-110 transition-transform">
+                    <Send className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold font-sans">Telegram</span>
+                </button>
+
+                {/* Native Device Share Sheet */}
+                <button
+                  type="button"
+                  onClick={handleNativeShare}
+                  className="p-3 rounded-xl bg-purple-950/50 hover:bg-purple-900/60 border border-purple-500/40 text-purple-200 flex flex-col items-center justify-center space-y-1.5 transition active:scale-95 cursor-pointer shadow-md group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white shadow group-hover:scale-110 transition-transform">
+                    <Share2 className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold font-sans">More Apps...</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Printable & Scannable QR Code Card */}
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-[#210c1e] to-[#160814] border border-rose-900/60 flex flex-col sm:flex-row items-center justify-between gap-5">
+              <div className="flex items-center space-x-4">
+                <div className="w-24 h-24 sm:w-28 sm:h-28 bg-white p-2 rounded-xl shadow-xl flex items-center justify-center shrink-0 border border-amber-300/40">
+                  <img
+                    src={getQrCodeSvgUrl(shareUrl, 240)}
+                    alt="Birthday Keepsake QR Code"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-cinzel text-sm sm:text-base font-bold text-amber-200 flex items-center space-x-1.5">
+                    <QrCode className="w-4 h-4 text-amber-400" />
+                    <span>Printable Keepsake QR Code</span>
+                  </h3>
+                  <p className="text-xs text-stone-300 leading-relaxed">
+                    Print this QR code on a physical birthday card or greeting note. The recipient simply points their phone camera to open all 3 unsealing envelopes!
+                  </p>
+                  <div className="pt-1">
+                    <a
+                      href={getQrCodeSvgUrl(shareUrl, 400)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1 text-xs text-amber-300 hover:text-amber-200 underline underline-offset-4"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download High-Res QR Code</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Test in Viewer Mode */}
             <div className="flex justify-center pt-2">
               <button
                 type="button"
